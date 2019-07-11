@@ -3,11 +3,9 @@ package io.sast.demo.cameraIntrinsic;
 import android.opengl.GLES20;
 import android.opengl.GLSurfaceView;
 import android.os.Handler;
-import android.os.Message;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
-import android.view.SurfaceView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -30,7 +28,6 @@ import javax.microedition.khronos.opengles.GL10;
 import io.sast.demo.cameraIntrinsic.helpers.CameraPermissionHelper;
 import io.sast.demo.cameraIntrinsic.helpers.DisplayRotationHelper;
 import io.sast.demo.cameraIntrinsic.helpers.FullScreenHelper;
-import io.sast.demo.cameraIntrinsic.helpers.TapHelper;
 import io.sast.demo.cameraIntrinsic.renderer.BackgroundRenderer;
 
 public class MainActivity extends AppCompatActivity implements GLSurfaceView.Renderer {
@@ -38,7 +35,6 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
     GLSurfaceView surfaceView;
     final BackgroundRenderer backgroundRenderer = new BackgroundRenderer();
     DisplayRotationHelper displayRotationHelper;
-    TapHelper tapHelper;
 
     Runnable runnable;
     Handler handler;
@@ -59,9 +55,6 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
         txView = findViewById(R.id.txView);
 
         displayRotationHelper = new DisplayRotationHelper(this);
-        tapHelper = new TapHelper(this);
-        surfaceView.setOnTouchListener(tapHelper);
-
         surfaceView.setPreserveEGLContextOnPause(true);
         surfaceView.setEGLContextClientVersion(2);
         surfaceView.setEGLConfigChooser(8, 8, 8, 8, 16, 0); // Alpha used for plane blending.
@@ -140,7 +133,6 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
     protected void onResume() {
         super.onResume();
         if (session == null) {
-            Exception exception = null;
             String message = null;
             try {
                 switch (ArCoreApk.getInstance().requestInstall(this, !installRequested)) {
@@ -162,21 +154,15 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
             } catch (UnavailableArcoreNotInstalledException
                     | UnavailableUserDeclinedInstallationException e) {
                 message = "Please install ARCore";
-                exception = e;
             } catch (UnavailableApkTooOldException e) {
                 message = "Please update ARCore";
-                exception = e;
             } catch (UnavailableSdkTooOldException e) {
                 message = "Please update this app";
-                exception = e;
             } catch (UnavailableDeviceNotCompatibleException e) {
                 message = "This device does not support AR";
-                exception = e;
             } catch (Exception e) {
                 message = "Failed to create AR session";
-                exception = e;
             }
-
             if (message != null) {
                 return;
             }
@@ -221,15 +207,25 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
         GLES20.glViewport(0, 0, width, height);
     }
 
+    int frameCount = 0;
+    long previousTimestamp = 0l;
+
     @Override
     public void onDrawFrame(GL10 gl) {
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT | GLES20.GL_DEPTH_BUFFER_BIT);
         if (session == null) {
             return;
         }
+        if (previousTimestamp == 0 || previousTimestamp + 1000 < System.currentTimeMillis()) {
+            previousTimestamp = System.currentTimeMillis();
+            Log.d("FPS", "" + frameCount);
+            frameCount = 0;
+        }
+        frameCount++;
         displayRotationHelper.updateSessionIfNeeded(session);
 
         Frame frame = null;
+
         try {
             session.setCameraTextureName(backgroundRenderer.getTextureId());
 
@@ -259,7 +255,6 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
         if (!CameraPermissionHelper.hasCameraPermission(this)) {
             Toast.makeText(this, "Camera permission is needed to run this application", Toast.LENGTH_LONG).show();
             if (!CameraPermissionHelper.shouldShowRequestPermissionRationale(this)) {
-                // Permission denied with checking "Do not ask again".
                 CameraPermissionHelper.launchPermissionSettings(this);
             }
             finish();
